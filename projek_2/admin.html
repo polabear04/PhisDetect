@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Admin - PhisDetect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- Library Grafik -->
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <style> body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #f8fafc; } </style>
+</head>
+<body class="text-slate-800 p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-10 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-extrabold text-slate-900">Admin Dashboard 🛡️</h1>
+                <p class="text-slate-500">Monitoring Sistem Deteksi Phishing AI</p>
+            </div>
+            <button onclick="window.print()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2 rounded-lg font-bold transition shadow-md">
+                🖨️ Cetak Laporan
+            </button>
+        </header>
+
+        <!-- Kartu Metrik Utama -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-sm text-slate-400 font-bold uppercase">Total Pemindaian</p>
+                <h2 id="stat-total" class="text-4xl font-black text-indigo-600 mt-2">0</h2>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-sm text-slate-400 font-bold uppercase">Ancaman Phishing</p>
+                <h2 id="stat-phishing" class="text-4xl font-black text-rose-600 mt-2">0</h2>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-sm text-slate-400 font-bold uppercase">Tautan Aman</p>
+                <h2 id="stat-aman" class="text-4xl font-black text-emerald-600 mt-2">0</h2>
+            </div>
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p class="text-sm text-slate-400 font-bold uppercase">Feedback Kesalahan</p>
+                <h2 id="stat-reports" class="text-4xl font-black text-amber-500 mt-2">0</h2>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Grafik Visualisasi (Kiri) -->
+            <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <h3 class="font-bold text-lg mb-6 border-b pb-2">Rasio Deteksi Ancaman</h3>
+                <canvas id="myPieChart"></canvas>
+            </div>
+
+            <!-- Tabel Riwayat Terbaru (Kanan) -->
+            <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                <h3 class="font-bold text-lg mb-6 border-b pb-2">Log Pemindaian Terbaru</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-500 text-sm">
+                                <th class="p-3 rounded-tl-lg">Waktu</th>
+                                <th class="p-3">Target URL</th>
+                                <th class="p-3">Status</th>
+                                <th class="p-3 rounded-tr-lg">Keyakinan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="text-sm">
+                            <!-- Data tabel disuntikkan via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Mengambil data statistik dari Flask API
+        fetch('http://127.0.0.1:5000/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            // Isi Angka Metrik
+            document.getElementById('stat-total').innerText = data.total_scans;
+            document.getElementById('stat-phishing').innerText = data.phishing_count;
+            document.getElementById('stat-aman').innerText = data.aman_count;
+            document.getElementById('stat-reports').innerText = data.total_reports;
+
+            // Render Grafik Pie Chart.js
+            const ctx = document.getElementById('myPieChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Phishing (Bahaya)', 'Aman'],
+                    datasets: [{
+                        data: [data.phishing_count, data.aman_count],
+                        backgroundColor: ['#e11d48', '#10b981'],
+                        borderWidth: 0
+                    }]
+                },
+                options: { cutout: '70%', plugins: { legend: { position: 'bottom' } } }
+            });
+
+            // Render Tabel Riwayat
+            const tableBody = document.getElementById('table-body');
+            data.recent_scans.forEach(row => {
+                const isPhish = row.status === 'PHISHING';
+                const statusBadge = `<span class="px-2 py-1 text-xs font-bold rounded-md ${isPhish ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}">${row.status}</span>`;
+                
+                tableBody.innerHTML += `
+                    <tr class="border-b border-slate-50 hover:bg-slate-50">
+                        <td class="p-3 text-slate-400 whitespace-nowrap">${row.scan_date}</td>
+                        <td class="p-3 font-mono text-slate-600 truncate max-w-[200px]">${row.url}</td>
+                        <td class="p-3">${statusBadge}</td>
+                        <td class="p-3 font-bold ${isPhish ? 'text-rose-600' : 'text-emerald-600'}">${row.confidence}%</td>
+                    </tr>
+                `;
+            });
+        })
+        .catch(error => console.error("Gagal memuat statistik:", error));
+    </script>
+</body>
+</html>
